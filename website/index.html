@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#08142d">
+  <meta name="description" content="Download the Automation Platform Student Launcher for Windows, Linux, and macOS.">
+  <title>Automation Platform — Student Launcher</title>
+  <link rel="icon" href="assets/icon.png" type="image/png">
+  <link rel="stylesheet" href="style.css">
+  <script src="script.js" defer></script>
+</head>
+<body>
+  <div class="ambient ambient-one" aria-hidden="true"></div>
+  <div class="ambient ambient-two" aria-hidden="true"></div>
+  <div class="page-shell">
+    <header class="topbar">
+      <a class="brand" href="#top" aria-label="Automation Platform home">
+        <img src="assets/icon.png" alt="" width="48" height="48">
+        <span>Automation <strong>Platform</strong></span>
+      </a>
+      <a class="nav-link" href="#how-it-works">How it works <span aria-hidden="true">↗</span></a>
+    </header>
+
+    <main id="top">
+      <section class="hero" aria-labelledby="hero-title">
+        <p class="eyebrow"><span class="eyebrow-dot"></span> STUDENT DESKTOP LAUNCHER</p>
+        <h1 id="hero-title">Your automation workspace.<br><span>One click away.</span></h1>
+        <p class="hero-subtitle">Launch and manage your Automation Platform locally. Choose your operating system, install the launcher, and start working — no command line needed.</p>
+        <a class="hero-jump" href="#downloads">Choose your download <span aria-hidden="true">↓</span></a>
+        <div class="hero-stat"><span class="stat-dot"></span> Runs locally with Docker <span class="stat-separator">·</span> Automatically finds an available port</div>
+      </section>
+
+      <section class="downloads" id="downloads" aria-labelledby="downloads-title">
+        <div class="section-heading">
+          <div>
+            <p class="section-kicker">GET STARTED</p>
+            <h2 id="downloads-title">Download the launcher</h2>
+          </div>
+          <p>Pick the version that matches your computer.</p>
+        </div>
+
+        <div class="download-grid">
+          <article class="download-card" data-os="windows">
+            <div class="card-top"><div class="os-symbol windows" aria-hidden="true"><svg viewBox="0 0 32 32" fill="currentColor"><path d="M2 6.3 14 4.6v10.4H2zm14-1.9L30 2v13H16zM2 17h12v10.4L2 25.7zm14 0h14v13l-14-2.4z"/></svg></div><span class="card-tag" id="windows-tag">Windows</span></div>
+            <h3>Windows</h3><p class="os-detail">Windows 10 / 11 · 64-bit</p>
+            <p class="card-description">A familiar desktop app with a shortcut and automatic browser launch.</p>
+            <a class="download-button" id="windows-download" aria-disabled="true" tabindex="-1"><span id="windows-button-label">Coming soon</span><span aria-hidden="true">↗</span></a>
+            <p class="download-hint" id="windows-hint">The Windows launcher has been tested locally; the public package is not published yet.</p>
+          </article>
+          <article class="download-card" data-os="linux">
+            <div class="card-top"><div class="os-symbol linux" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2"><path d="M11 9.5a5 5 0 0 1 10 0v9a8 8 0 0 1-16 0l6-9Z"/><path d="M21 9.5 27 18.5a8 8 0 0 1-8 8M12 12h.01M20 12h.01M14 17c1.3 1 2.7 1 4 0"/><path d="M8 26c-2 2-4 2-5 1M24 26c2 2 4 2 5 1"/></svg></div><span class="card-tag">Linux</span></div>
+            <h3>Linux</h3><p class="os-detail">Desktop Linux · x86_64</p>
+            <p class="card-description">Run the same launcher on your Linux workstation with Docker Engine.</p>
+            <a class="download-button" id="linux-download" aria-disabled="true" tabindex="-1"><span id="linux-button-label">Coming soon</span><span aria-hidden="true">↗</span></a>
+            <p class="download-hint" id="linux-hint">Linux package pending build and testing.</p>
+          </article>
+          <article class="download-card" data-os="macos">
+            <div class="card-top"><div class="os-symbol apple" aria-hidden="true"><svg viewBox="0 0 32 32" fill="currentColor"><path d="M22.4 16.3c0-3.1 2.5-4.6 2.6-4.7-1.4-2-3.5-2.3-4.2-2.3-1.8-.2-3.4 1.1-4.3 1.1s-2.3-1-3.8-1C9 9.5 6.6 12 6.6 16.5c0 2.1.8 4.4 1.9 6 1.1 1.6 2.3 3.4 3.9 3.3 1.5-.1 2-.9 3.8-.9s2.2.9 3.9.8c1.7 0 2.8-1.5 3.8-3.1.9-1.4 1.3-2.7 1.3-2.8-.1 0-2.8-1.1-2.8-3.5zM19.8 7.5c.8-1 1.4-2.5 1.2-4-.9.1-2.6 1-3.4 2-.7.9-1.3 2.3-1.1 3.8 1.3.1 2.6-.7 3.3-1.8z"/></svg></div><span class="card-tag">macOS</span></div>
+            <h3>macOS</h3><p class="os-detail">Mac · Apple Silicon / Intel*</p>
+            <p class="card-description">An elegant Mac app for launching your local automation workspace.</p>
+            <a class="download-button" id="macos-download" aria-disabled="true" tabindex="-1"><span id="macos-button-label">Coming soon</span><span aria-hidden="true">↗</span></a>
+            <p class="download-hint" id="macos-hint">Mac package pending platform-specific builds and testing.</p>
+          </article>
+        </div>
+        <p class="asterisk">* macOS architectures will be confirmed when release packages are built.</p>
+        <p class="platform-note" id="platform-note" role="status"></p>
+      </section>
+
+      <section class="steps-section" id="how-it-works" aria-labelledby="steps-title">
+        <div class="section-heading"><div><p class="section-kicker">SIMPLE SETUP</p><h2 id="steps-title">How it works</h2></div></div>
+        <div class="steps-grid">
+          <div class="step"><span class="step-number">01</span><h3>Install Docker</h3><p>Make sure Docker Desktop or a compatible Docker Engine is installed and running.</p></div>
+          <div class="step"><span class="step-number">02</span><h3>Get the launcher</h3><p>Download the package for your operating system and complete the setup.</p></div>
+          <div class="step"><span class="step-number">03</span><h3>Start building</h3><p>Open the launcher, choose an available port, and launch the homepage in your browser.</p></div>
+        </div>
+      </section>
+
+      <section class="feature-banner"><div class="banner-mark">✦</div><div><h2>Made for your workflow.</h2><p>Start, stop, update, and inspect your local environment — all from one place. Your Docker data volumes remain on your computer.</p></div></section>
+    </main>
+    <footer><span>© <span id="year"></span> Automation Platform</span><span>Student Launcher · Windows · Linux · macOS</span></footer>
+  </div>
+</body>
+</html>

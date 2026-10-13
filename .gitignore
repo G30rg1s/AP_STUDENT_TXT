@@ -1,6 +1,14 @@
-.env
+﻿.env
+.env.*
+!.env.example
 .idea/
 *.iml
 .vscode/
+.venv/
+__pycache__/
+*.pyc
+build/
+dist/
+*.spec
 .DS_Store
 Thumbs.db

@@ -5,14 +5,41 @@
  * Official GitHub Releases:
  * https://github.com/G30rg1s/automation-platform-student/releases
  *
- * Linux and macOS downloads will be enabled
- * when their packages are available.
+ * Windows: Stable v1.0.0
+ * Linux: Beta v1.1.0-beta.1
+ * macOS: Beta v1.1.0-beta.1
  */
 
 const downloads = {
-  windows: "https://github.com/G30rg1s/automation-platform-student/releases/download/v1.0.0/AutomationPlatform-Setup.exe",
-  linux: "",
-  macos: ""
+  windows:
+    "https://github.com/G30rg1s/automation-platform-student/releases/download/v1.0.0/AutomationPlatform-Setup.exe",
+
+  linux:
+    "https://github.com/G30rg1s/automation-platform-student/releases/download/v1.1.0-beta.1/AutomationPlatform-Linux-Release.tar.gz",
+
+  macos:
+    "https://github.com/G30rg1s/automation-platform-student/releases/download/v1.1.0-beta.1/AutomationPlatform-macOS-Release.zip"
+};
+
+// ========================================
+// DOWNLOAD DETAILS
+// ========================================
+
+const downloadDetails = {
+  windows: {
+    label: "Download for Windows",
+    hint: "Windows installer (.exe) - Stable v1.0.0"
+  },
+
+  linux: {
+    label: "Download for Linux (Beta)",
+    hint: "Linux package (.tar.gz) - Beta v1.1.0-beta.1"
+  },
+
+  macos: {
+    label: "Download for macOS (Beta)",
+    hint: "macOS application (.zip) - Beta v1.1.0-beta.1"
+  }
 };
 
 // ========================================
@@ -20,34 +47,51 @@ const downloads = {
 // ========================================
 
 for (const [os, url] of Object.entries(downloads)) {
-  const button = document.getElementById(`${os}-download`);
-  const label = document.getElementById(`${os}-button-label`);
-  const hint = document.getElementById(`${os}-hint`);
+  const button = document.getElementById(
+    `${os}-download`
+  );
+
+  const label = document.getElementById(
+    `${os}-button-label`
+  );
+
+  const hint = document.getElementById(
+    `${os}-hint`
+  );
 
   if (!button || !label || !hint) {
     continue;
   }
 
+  // Keep button disabled if no valid download URL exists.
   if (!url || !/^https:\/\//i.test(url)) {
+    button.removeAttribute("href");
+
+    button.setAttribute(
+      "aria-disabled",
+      "true"
+    );
+
     continue;
   }
 
+  // Official GitHub Release download URL.
   button.href = url;
 
+  // Enable the button.
   button.removeAttribute("aria-disabled");
   button.removeAttribute("tabindex");
+
+  // GitHub download URLs are cross-origin.
+  // Let the browser handle the download normally.
   button.removeAttribute("download");
 
-  if (os === "windows") {
-    label.textContent = "Download for Windows";
+  // Update button label and package information.
+  const details = downloadDetails[os];
 
-    hint.textContent =
-      "Download Automation Platform Setup (.exe) - Version 1.0.0";
-  } else {
-    label.textContent = "Download package";
-
-    hint.textContent =
-      "Download from the official Automation Platform release.";
+  if (details) {
+    label.textContent = details.label;
+    hint.textContent = details.hint;
   }
 }
 
@@ -84,17 +128,21 @@ if (detectedOS) {
     card.classList.add("recommended");
   }
 
-  const note = document.getElementById("platform-note");
+  const note = document.getElementById(
+    "platform-note"
+  );
 
   const name =
     detectedOS === "macos"
       ? "macOS"
-      : detectedOS[0].toUpperCase() +
-        detectedOS.slice(1);
+      : detectedOS === "linux"
+        ? "Linux"
+        : "Windows";
 
   if (note) {
     note.textContent =
-      `Detected platform: ${name}. Choose another package if needed.`;
+      `Detected platform: ${name}. ` +
+      "Choose another package if needed.";
   }
 }
 
@@ -102,8 +150,11 @@ if (detectedOS) {
 // COPYRIGHT YEAR
 // ========================================
 
-const yearElement = document.getElementById("year");
+const yearElement = document.getElementById(
+  "year"
+);
 
 if (yearElement) {
-  yearElement.textContent = new Date().getFullYear();
+  yearElement.textContent =
+    new Date().getFullYear();
 }

@@ -1,0 +1,117 @@
+
+name: Build Linux and macOS Launchers
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-linux:
+    name: Build Linux Launcher
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Linux GUI dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            python3-tk \
+            python3-dev \
+            python3-venv
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pyinstaller
+
+      - name: Build Linux executable
+        run: |
+          python -m PyInstaller \
+            --noconfirm \
+            --clean \
+            --windowed \
+            --onedir \
+            --name AutomationPlatformLauncher \
+            launcher/student_launcher.py
+
+      - name: Prepare Linux package
+        run: |
+          cp compose.yaml dist/AutomationPlatformLauncher/
+          cp AutomationPlatform.ico dist/AutomationPlatformLauncher/
+          cp -R docker dist/AutomationPlatformLauncher/
+
+          cd dist
+          tar -czf ../AutomationPlatform-Linux.tar.gz \
+            AutomationPlatformLauncher
+
+      - name: Upload Linux package
+        uses: actions/upload-artifact@v4
+        with:
+          name: AutomationPlatform-Linux
+          path: AutomationPlatform-Linux.tar.gz
+          if-no-files-found: error
+
+  build-macos:
+    name: Build macOS Launcher
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pyinstaller
+
+      - name: Build macOS application
+        run: |
+          python -m PyInstaller \
+            --noconfirm \
+            --clean \
+            --windowed \
+            --onedir \
+            --name AutomationPlatformLauncher \
+            launcher/student_launcher.py
+
+      - name: Prepare macOS package
+        run: |
+          mkdir -p dist/AutomationPlatform-macOS
+
+          cp -R dist/AutomationPlatformLauncher.app \
+            dist/AutomationPlatform-macOS/
+
+          cp compose.yaml \
+            dist/AutomationPlatform-macOS/
+
+          cp AutomationPlatform.ico \
+            dist/AutomationPlatform-macOS/
+
+          cp -R docker \
+            dist/AutomationPlatform-macOS/
+
+          cd dist
+          zip -r -y ../AutomationPlatform-macOS.zip \
+            AutomationPlatform-macOS
+
+      - name: Upload macOS package
+        uses: actions/upload-artifact@v4
+        with:
+          name: AutomationPlatform-macOS
+          path: AutomationPlatform-macOS.zip
+          if-no-files-found: error

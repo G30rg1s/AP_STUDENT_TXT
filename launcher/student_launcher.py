@@ -4,6 +4,7 @@ import os
 import platform
 import queue
 import re
+import secrets
 import shlex
 import shutil
 import socket
@@ -21,8 +22,11 @@ from tkinter import messagebox, scrolledtext, simpledialog, ttk
 
 
 APP_NAME = "Automation Platform"
+COMPOSE_PROJECT_NAME = "automation-platform-student"
+
 START_PORT = 8080
 MAX_PORT = 8200
+
 HOMEPAGE_PATH = "/automation/homepage"
 
 
@@ -38,27 +42,12 @@ class StudentLauncher:
         self.system = platform.system()
         self.is_frozen = getattr(sys, "frozen", False)
 
-        # Source:
-        # automation-platform-student/launcher/student_launcher.py
-        #
-        # Executable:
-        # automation-platform-student/AutomationPlatformLauncher.exe
-
-        if self.is_frozen:
-            self.executable = Path(sys.executable).resolve()
-
-            if self.system == "Darwin":
-                self.base_dir = (
-                    self.find_macos_package_directory()
-                )
-            else:
-                self.base_dir = self.executable.parent
-
-        else:
-            self.executable = Path(__file__).resolve()
-            self.base_dir = self.executable.parent.parent
+        self.executable = self.get_executable_path()
+        self.base_dir = self.find_project_directory()
 
         self.compose_file = self.base_dir / "compose.yaml"
+        self.env_file = self.base_dir / ".env"
+        self.icon_file = self.base_dir / "AutomationPlatform.ico"
 
         self.settings_dir = (
                 Path.home() / ".automation-platform-launcher"
@@ -95,22 +84,55 @@ class StudentLauncher:
             )
 
     # ========================================
-    # PATHS AND URLS
+    # PATHS
     # ========================================
 
-    def find_macos_package_directory(self):
-        path = self.executable
+    def get_executable_path(self):
+        if self.is_frozen:
+            return Path(sys.executable).resolve()
 
-        for parent in path.parents:
+        return Path(__file__).resolve()
+
+    def find_project_directory(self):
+        """
+        Source mode:
+          project/launcher/student_launcher.py
+          project/compose.yaml
+
+        Windows packaged mode:
+          package/AutomationPlatformLauncher.exe
+          package/compose.yaml
+
+        Linux packaged mode:
+          package/AutomationPlatformLauncher
+          package/compose.yaml
+
+        macOS packaged mode:
+          package/AutomationPlatformLauncher.app
+          package/compose.yaml
+        """
+
+        if not self.is_frozen:
+            return self.executable.parent.parent
+
+        if self.system == "Darwin":
+            for parent in self.executable.parents:
+                if parent.suffix.lower() == ".app":
+                    return parent.parent
+
+        return self.executable.parent
+
+    def find_macos_app(self):
+        if self.system != "Darwin":
+            return None
+
+        for parent in self.executable.parents:
             if parent.suffix.lower() == ".app":
-                return parent.parent
+                return parent
 
-        return path.parent
+        return None
 
     def application_url(self, port=None):
-        """
-        Always open the real application homepage.
-        """
         if port is None:
             port = self.selected_port
 
@@ -120,11 +142,67 @@ class StudentLauncher:
         )
 
     def health_check_url(self, port):
-        """
-        This URL is only for checking whether
-        the backend HTTP server is responding.
-        """
         return f"http://127.0.0.1:{int(port)}/"
+
+    # ========================================
+    # ENVIRONMENT CONFIGURATION
+    # ========================================
+
+    def ensure_environment_file(self):
+        """
+        Create .env only when it does not exist.
+
+        Never overwrite an existing student's settings.
+
+        The current testing Compose configuration uses
+        MySQL password 1234. The generated MySQL values
+        are also kept at 1234 for compatibility.
+        """
+
+        if self.env_file.is_file():
+            return False
+
+        if not self.base_dir.is_dir():
+            raise RuntimeError(
+                "Application directory does not exist:\n"
+                f"{self.base_dir}"
+            )
+
+        jwt_secret = secrets.token_hex(32)
+
+        content = (
+            "# Automation Platform Student Configuration\n"
+            "# Automatically generated on first launch\n"
+            "# Do not publish this file\n"
+            "\n"
+            f"JWT_SECRET={jwt_secret}\n"
+            "MYSQL_PASSWORD=1234\n"
+            "MYSQL_ROOT_PASSWORD=1234\n"
+            "APP_PORT=8080\n"
+        )
+
+        try:
+            with self.env_file.open(
+                    "x",
+                    encoding="utf-8",
+                    newline="\n"
+            ) as file:
+                file.write(content)
+
+            if self.system != "Windows":
+                self.env_file.chmod(0o600)
+
+        except FileExistsError:
+            return False
+
+        except OSError as error:
+            raise RuntimeError(
+                "Cannot create .env file in:\n"
+                f"{self.base_dir}\n\n"
+                f"{error}"
+            ) from error
+
+        return True
 
     # ========================================
     # SETTINGS
@@ -225,7 +303,9 @@ class StudentLauncher:
             pady=(3, 15)
         )
 
+        # ====================================
         # APPLICATION STATUS
+        # ====================================
 
         status_frame = tk.Frame(
             main,
@@ -263,7 +343,9 @@ class StudentLauncher:
             pady=(0, 12)
         )
 
-        # APPLICATION URL
+        # ====================================
+        # APPLICATION ADDRESS
+        # ====================================
 
         port_frame = tk.Frame(
             main,
@@ -312,7 +394,9 @@ class StudentLauncher:
             pady=(3, 12)
         )
 
-        # ACTION BUTTONS
+        # ====================================
+        # BUTTONS
+        # ====================================
 
         actions = tk.Frame(
             main,
@@ -390,7 +474,9 @@ class StudentLauncher:
             lock_during_action=False
         )
 
-        # ACTIVITY LOGS
+        # ====================================
+        # LOGS
+        # ====================================
 
         tk.Label(
             main,
@@ -428,6 +514,26 @@ class StudentLauncher:
         self.log(f"Selected port: {self.selected_port}")
         self.log(f"Homepage: {self.application_url()}")
         self.log("Docker Desktop / Docker Engine is required.")
+
+        try:
+            created = self.ensure_environment_file()
+
+            if created:
+                self.log(
+                    "First launch: .env configuration created."
+                )
+            else:
+                self.log(
+                    "Existing .env configuration preserved."
+                )
+
+        except Exception as error:
+            self.log(
+                f"Environment configuration error: {error}"
+            )
+            self.status_text.set(
+                "Configuration error - check logs"
+            )
 
     def add_button(
             self,
@@ -618,6 +724,7 @@ class StudentLauncher:
                 f"on port {existing}.\n\n"
                 "Stop the backend before changing its port."
             )
+
             return
 
         selected = self.ask_for_available_port(
@@ -647,6 +754,7 @@ class StudentLauncher:
             self.log(
                 f"Using existing Docker backend port: {existing}"
             )
+
             return True
 
         if self.port_is_available(self.selected_port):
@@ -669,7 +777,7 @@ class StudentLauncher:
         return True
 
     # ========================================
-    # DOCKER COMMANDS
+    # DOCKER
     # ========================================
 
     def docker_environment(self, selected_port=None):
@@ -748,10 +856,11 @@ class StudentLauncher:
                 Path.home() / ".docker/bin/docker"
             ])
 
-        else:
+        elif self.system == "Linux":
             candidates.extend([
                 Path("/usr/bin/docker"),
-                Path("/usr/local/bin/docker")
+                Path("/usr/local/bin/docker"),
+                Path.home() / ".docker/bin/docker"
             ])
 
         for path in candidates:
@@ -759,7 +868,7 @@ class StudentLauncher:
                 return str(path)
 
         raise RuntimeError(
-            "Docker was not found. "
+            "Docker was not found.\n"
             "Install and start Docker Desktop "
             "or a compatible Docker Engine."
         )
@@ -776,6 +885,8 @@ class StudentLauncher:
                 f"{self.compose_file}"
             )
 
+        self.ensure_environment_file()
+
         docker = self.find_docker_executable()
 
         return self.run_command(
@@ -783,7 +894,7 @@ class StudentLauncher:
                 docker,
                 "compose",
                 "-p",
-                "automation-platform-student",
+                COMPOSE_PROJECT_NAME,
                 "-f",
                 str(self.compose_file),
                 *arguments
@@ -823,9 +934,9 @@ class StudentLauncher:
                     ("status", "Operation timed out")
                 )
 
-            except Exception as exception:
+            except Exception as error:
                 self.events.put(
-                    ("log", f"Error: {exception}")
+                    ("log", f"Error: {error}")
                 )
 
                 self.events.put(
@@ -857,8 +968,6 @@ class StudentLauncher:
                 return response.status < 500
 
         except urllib.error.HTTPError as error:
-            # HTTP 401, 403 or 404 indicates
-            # an HTTP server responded.
             return error.code < 500
 
         except (
@@ -936,8 +1045,8 @@ class StudentLauncher:
                 self.events.put(
                     (
                         "log",
-                        "Backend did not respond within 90 seconds. "
-                        "Check Docker logs."
+                        "Backend did not respond within "
+                        "90 seconds. Check Docker logs."
                     )
                 )
 
@@ -952,9 +1061,7 @@ class StudentLauncher:
 
     def stop_application(self):
         def action():
-            self.docker_compose(
-                "stop"
-            )
+            self.docker_compose("stop")
 
             self.events.put(
                 ("status", "Stopped")
@@ -1103,10 +1210,11 @@ class StudentLauncher:
         )
 
     # ========================================
-    # FIND DESKTOP DIRECTORY
+    # DESKTOP DIRECTORY
     # ========================================
 
     def find_desktop_directory(self):
+
         if self.system == "Windows":
             try:
                 result = subprocess.run(
@@ -1175,7 +1283,7 @@ class StudentLauncher:
         return None
 
     # ========================================
-    # DESKTOP SHORTCUTS
+    # SHORTCUT PATH
     # ========================================
 
     def shortcut_path(self, desktop):
@@ -1196,6 +1304,10 @@ class StudentLauncher:
                 "automation-platform-launcher.desktop"
         )
 
+    # ========================================
+    # AUTOMATIC DESKTOP SHORTCUT
+    # ========================================
+
     def create_first_run_shortcut(self):
         try:
             desktop = self.find_desktop_directory()
@@ -1214,10 +1326,10 @@ class StudentLauncher:
                     show_message=False
                 )
 
-        except Exception as exception:
+        except Exception as error:
             self.log(
                 "Automatic shortcut creation skipped: "
-                f"{exception}"
+                f"{error}"
             )
 
     def create_desktop_shortcut(
@@ -1251,7 +1363,7 @@ class StudentLauncher:
 
             else:
                 raise RuntimeError(
-                    f"Unsupported system: {self.system}"
+                    f"Unsupported operating system: {self.system}"
                 )
 
             self.log(
@@ -1265,16 +1377,20 @@ class StudentLauncher:
                     f"{shortcut}"
                 )
 
-        except Exception as exception:
+        except Exception as error:
             self.log(
-                f"Shortcut error: {exception}"
+                f"Shortcut error: {error}"
             )
 
             if show_message:
                 messagebox.showerror(
                     "Shortcut Error",
-                    str(exception)
+                    str(error)
                 )
+
+    # ========================================
+    # LAUNCH COMMAND
+    # ========================================
 
     def launch_command(self):
         if self.is_frozen:
@@ -1292,12 +1408,14 @@ class StudentLauncher:
     # WINDOWS SHORTCUT
     # ========================================
 
-
     def create_windows_shortcut(self, shortcut):
         executable, arguments = self.launch_command()
 
         def ps_quote(value):
-            return "'" + str(value).replace("'", "''") + "'"
+            return "'" + str(value).replace(
+                "'",
+                "''"
+            ) + "'"
 
         arguments_string = (
             subprocess.list2cmdline(arguments)
@@ -1305,11 +1423,9 @@ class StudentLauncher:
             else ""
         )
 
-        # Use our custom icon directly when available.
-        icon_file = self.base_dir / "AutomationPlatform.ico"
-
-        if icon_file.is_file():
-            icon_location = f"{icon_file},0"
+        # Use our ICO directly, not the Windows EXE icon cache.
+        if self.icon_file.is_file():
+            icon_location = f"{self.icon_file},0"
         else:
             icon_location = f"{executable},0"
 
@@ -1341,7 +1457,6 @@ class StudentLauncher:
                 result.stderr.strip()
                 or "Windows shortcut creation failed."
             )
-
 
     # ========================================
     # LINUX SHORTCUT
@@ -1399,17 +1514,26 @@ class StudentLauncher:
     # ========================================
 
     def create_macos_shortcut(self, shortcut):
-        executable, arguments = self.launch_command()
+        macos_app = self.find_macos_app()
 
-        command = " ".join(
-            shlex.quote(str(part))
-            for part in [executable, *arguments]
-        )
+        if self.is_frozen and macos_app is not None:
+            command = (
+                    "open " +
+                    shlex.quote(str(macos_app))
+            )
+
+        else:
+            executable, arguments = self.launch_command()
+
+            command = " ".join(
+                shlex.quote(str(part))
+                for part in [executable, *arguments]
+            )
 
         content = (
             "#!/bin/bash\n"
             f"cd {shlex.quote(str(self.base_dir))}\n"
-            f"exec {command}\n"
+            f"{command}\n"
         )
 
         shortcut.write_text(

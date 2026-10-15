@@ -5,14 +5,18 @@
  * Official GitHub Releases:
  * https://github.com/G30rg1s/automation-platform-student/releases
  *
- * Windows: Stable v1.0.0
+ * Windows: Stable v1.0.1
  * Linux: Beta v1.1.0-beta.1
  * macOS: Beta v1.1.0-beta.1
  */
 
+// ========================================
+// OFFICIAL DOWNLOAD URLS
+// ========================================
+
 const downloads = {
   windows:
-    "https://github.com/G30rg1s/automation-platform-student/releases/download/v1.0.0/AutomationPlatform-Setup.exe",
+    "https://github.com/G30rg1s/automation-platform-student/releases/download/v1.0.1/AutomationPlatform-Setup-Test.exe",
 
   linux:
     "https://github.com/G30rg1s/automation-platform-student/releases/download/v1.1.0-beta.1/AutomationPlatform-Linux-Release.tar.gz",
@@ -28,7 +32,7 @@ const downloads = {
 const downloadDetails = {
   windows: {
     label: "Download for Windows",
-    hint: "Windows installer (.exe) - Stable v1.0.0"
+    hint: "Windows installer (.exe) - Stable v1.0.1"
   },
 
   linux: {
@@ -70,6 +74,11 @@ for (const [os, url] of Object.entries(downloads)) {
     button.setAttribute(
       "aria-disabled",
       "true"
+    );
+
+    button.setAttribute(
+      "tabindex",
+      "-1"
     );
 
     continue;

@@ -1,8 +1,13 @@
 
 #define MyAppName "Automation Platform"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.0.1"
 #define MyAppPublisher "Automation Platform"
 #define MyAppExeName "AutomationPlatformLauncher.exe"
+
+; ============================================
+; WINDOWS SETUP - TEST BUILD
+; Source: dist-test
+; ============================================
 
 [Setup]
 AppId=AutomationPlatformStudent
@@ -17,8 +22,9 @@ DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 
-OutputDir=..\installer-output
-OutputBaseFilename=AutomationPlatform-Setup
+; Keep the previous installer untouched.
+OutputDir=..\installer-output-test
+OutputBaseFilename=AutomationPlatform-Setup-Test
 
 SetupIconFile=..\AutomationPlatform.ico
 UninstallDisplayIcon={app}\AutomationPlatform.ico
@@ -37,37 +43,55 @@ UsePreviousAppDir=yes
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
+
+; ============================================
+; APPLICATION FILES
+; ============================================
+
 [Files]
-; The executable
-Source: "..\dist\AutomationPlatformLauncher\AutomationPlatformLauncher.exe"; DestDir: "{app}"; Flags: ignoreversion
 
-; PyInstaller runtime files
-Source: "..\dist\AutomationPlatformLauncher\_internal\*"; DestDir: "{app}\_internal"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Install the complete NEW PyInstaller build.
+;
+; PyInstaller was configured with:
+; contents_directory="."
+;
+; Therefore the executable, Python runtime,
+; compose.yaml, icon and Docker files are all
+; included in the same distribution tree.
+;
+; Do not copy the developer's .env file.
 
-; Our desktop icon
-Source: "..\AutomationPlatform.ico"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist-test\AutomationPlatformLauncher\*"; DestDir: "{app}"; Excludes: ".env"; Flags: ignoreversion recursesubdirs createallsubdirs
 
-; Docker Compose configuration
-Source: "..\compose.yaml"; DestDir: "{app}"; Flags: ignoreversion
 
-; MySQL initialization files
-Source: "..\docker\mysql\init\*"; DestDir: "{app}\docker\mysql\init"; Flags: ignoreversion recursesubdirs createallsubdirs
-
-; IMPORTANT:
-; Never package the developer's .env file.
+; ============================================
+; SHORTCUTS
+; ============================================
 
 [Icons]
-; Start Menu shortcut
+
+; Main Launcher - Start Menu
 Name: "{autoprograms}\Automation Platform Launcher"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\AutomationPlatform.ico"
 
-; Desktop shortcut
+; Main Launcher - Desktop
 Name: "{autodesktop}\Automation Platform Launcher"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\AutomationPlatform.ico"
 
+
+; ============================================
+; RUN AFTER INSTALLATION
+; ============================================
+
 [Run]
-; Launch the application after installation
+
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch Automation Platform"; Flags: nowait postinstall skipifsilent
 
+
+; ============================================
+; SECURE ENVIRONMENT CONFIGURATION
+; ============================================
+
 [Code]
+
 function BCryptGenRandom(
   hAlgorithm: Integer;
   var pbBuffer: Byte;
@@ -76,6 +100,7 @@ function BCryptGenRandom(
 ): Integer;
   external 'BCryptGenRandom@bcrypt.dll stdcall';
 
+
 function GenerateJwtSecret(): String;
 var
   Bytes: array[0..31] of Byte;
@@ -83,10 +108,12 @@ var
 begin
   Result := '';
 
-  { Use Windows cryptographic random number generator }
+  { Windows cryptographically secure random generator }
   if BCryptGenRandom(0, Bytes[0], 32, 2) <> 0 then
   begin
-    RaiseException('Unable to generate a secure JWT secret.');
+    RaiseException(
+      'Unable to generate a secure JWT secret.'
+    );
   end;
 
   for I := 0 to 31 do
@@ -95,6 +122,7 @@ begin
   end;
 end;
 
+
 procedure CreateEnvironmentFile();
 var
   EnvFile: String;
@@ -102,7 +130,7 @@ var
 begin
   EnvFile := ExpandConstant('{app}\.env');
 
-  { Never overwrite settings from an existing installation }
+  { Never overwrite configuration from an earlier installation. }
   if FileExists(EnvFile) then
   begin
     Log('Existing .env preserved.');
@@ -112,16 +140,22 @@ begin
   Content :=
     '# Automation Platform - Student Configuration' + #13#10 +
     '# Automatically generated during installation' + #13#10 +
-    'JWT_SECRET=' + GenerateJwtSecret() + #13#10 +
+        '# Do not publish this file' + #13#10#13#10 +
+        'JWT_SECRET=' + GenerateJwtSecret() + #13#10 +
+    'MYSQL_PASSWORD=1234' + #13#10 +
+    'MYSQL_ROOT_PASSWORD=1234' + #13#10 +
     'APP_PORT=8080' + #13#10;
 
   if not SaveStringToFile(EnvFile, Content, False) then
   begin
-    RaiseException('Unable to create the application .env file.');
+    RaiseException(
+      'Unable to create the application .env file.'
+    );
   end;
 
   Log('Student .env file created.');
 end;
+
 
 procedure CurStepChanged(CurStep: TSetupStep);
 begin

@@ -1,14 +1,29 @@
-﻿.env
+﻿# Environment / secrets
+.env
 .env.*
 !.env.example
+
+# IDE
 .idea/
 *.iml
 .vscode/
+
+# Python
 .venv/
 __pycache__/
 *.pyc
+
+# PyInstaller builds
 build/
+build-test/
 dist/
+dist-test/
 *.spec
+
+# Windows installers
+installer-output/
+installer-output-test/
+
+# Operating system
 .DS_Store
 Thumbs.db

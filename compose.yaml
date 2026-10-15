@@ -33,55 +33,37 @@ services:
     image: ghcr.io/g30rg1s/coding-factory-automation:latest
     pull_policy: always
 
-    # Only the Windows host port changes.
-    # The Spring Boot application still uses port 8080
-    # inside the Docker container.
-    #
-    # APP_PORT will be selected by the Student Launcher.
+    # The Student Launcher selects the free host port.
     ports:
       - "127.0.0.1:${APP_PORT:-8080}:8080"
 
     environment:
 
-      # ========================================
       # PRODUCTION DATABASE
-      # ========================================
       DB_URL: "jdbc:mysql://db:3306/production?serverTimezone=UTC&allowPublicKeyRetrieval=true&useSSL=false"
       DB_USERNAME: cf_user
       DB_PASSWORD: "1234"
 
-      # ========================================
       # FRONTEND TESTING DATABASE
-      # ========================================
       FRONTEND_TEST_DB_URL: "jdbc:mysql://db:3306/frontendtesting?serverTimezone=UTC&allowPublicKeyRetrieval=true&useSSL=false"
       FRONTEND_TEST_DB_USERNAME: cf_user
       FRONTEND_TEST_DB_PASSWORD: "1234"
 
-      # ========================================
       # API TESTING DATABASE
-      # ========================================
       API_TEST_DB_URL: "jdbc:mysql://db:3306/apitesting?serverTimezone=UTC&allowPublicKeyRetrieval=true&useSSL=false"
       API_TEST_DB_USERNAME: cf_user
       API_TEST_DB_PASSWORD: "1234"
 
-      # ========================================
       # KAFKA
-      # ========================================
       KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
 
-      # ========================================
       # LICENSE
-      # ========================================
       CF_LICENSE_STORAGE_PATH: "/app/data/license/activation.json"
 
-      # ========================================
       # SECURITY
-      # ========================================
       JWT_SECRET: "${JWT_SECRET:?Copy .env.example to .env before starting}"
 
-      # ========================================
       # CORS
-      # ========================================
       CORS_ORIGINS: "http://localhost:3000,http://localhost:5173"
 
     volumes:
@@ -91,9 +73,29 @@ services:
     depends_on:
       db:
         condition: service_healthy
-
       kafka:
         condition: service_healthy
+
+
+  # ========================================
+  # PARSER SERVICE
+  # ========================================
+  parser:
+    image: ghcr.io/g30rg1s/coding-factory-automation-parser:latest
+    pull_policy: always
+
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+
+    volumes:
+      # Shared uploaded files with Backend
+      - uploads_data:/app/uploads
+
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+    restart: unless-stopped
 
 
   # ========================================

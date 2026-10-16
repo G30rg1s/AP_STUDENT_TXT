@@ -2,105 +2,267 @@
 /*
  * Automation Platform - Student Download Page
  *
- * Official GitHub Releases:
- * https://github.com/G30rg1s/automation-platform-student/releases
+ * Automatically discover the latest available packages
+ * for Windows, Linux and macOS from GitHub Releases.
  *
- * Windows: Stable v1.0.1
- * Linux: Beta v1.1.0-beta.1
- * macOS: Beta v1.1.0-beta.1
+ * Each operating system has its own latest version.
  */
 
-// ========================================
-// OFFICIAL DOWNLOAD URLS
-// ========================================
-
-const downloads = {
-  windows:
-    "https://github.com/G30rg1s/automation-platform-student/releases/download/v1.0.1/AutomationPlatform-Setup-Test.exe",
-
-  linux:
-    "https://github.com/G30rg1s/automation-platform-student/releases/download/v1.1.0-beta.1/AutomationPlatform-Linux-Release.tar.gz",
-
-  macos:
-    "https://github.com/G30rg1s/automation-platform-student/releases/download/v1.1.0-beta.1/AutomationPlatform-macOS-Release.zip"
-};
+"use strict";
 
 // ========================================
-// DOWNLOAD DETAILS
+// GITHUB CONFIGURATION
 // ========================================
 
-const downloadDetails = {
-  windows: {
-    label: "Download for Windows",
-    hint: "Windows installer (.exe) - Stable v1.0.1"
-  },
+const GITHUB_OWNER = "G30rg1s";
+const GITHUB_REPO = "automation-platform-student";
 
-  linux: {
-    label: "Download for Linux (Beta)",
-    hint: "Linux package (.tar.gz) - Beta v1.1.0-beta.1"
-  },
+const RELEASES_API =
+  `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases?per_page=100`;
 
-  macos: {
-    label: "Download for macOS (Beta)",
-    hint: "macOS application (.zip) - Beta v1.1.0-beta.1"
+const RELEASES_PAGE =
+  `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases`;
+
+const OPERATING_SYSTEMS = [
+  "windows",
+  "linux",
+  "macos"
+];
+
+// ========================================
+// PACKAGE RECOGNITION
+// ========================================
+
+function detectPackageOS(filename) {
+  const name = filename.toLowerCase();
+
+  // Windows
+  if (
+    name.endsWith(".exe") ||
+    name.endsWith(".msi")
+  ) {
+    return "windows";
   }
-};
+
+  // Linux
+  if (
+    name.endsWith(".appimage") ||
+    name.endsWith(".deb") ||
+    name.endsWith(".rpm")
+  ) {
+    return "linux";
+  }
+
+  if (
+    (name.endsWith(".tar.gz") ||
+      name.endsWith(".tgz")) &&
+    /linux|ubuntu|debian/.test(name)
+  ) {
+    return "linux";
+  }
+
+  // macOS
+  if (
+    name.endsWith(".dmg") ||
+    name.endsWith(".pkg")
+  ) {
+    return "macos";
+  }
+
+  if (
+    name.endsWith(".zip") &&
+    /macos|mac-os|mac_os|darwin|osx/.test(name)
+  ) {
+    return "macos";
+  }
+
+  return null;
+}
 
 // ========================================
-// CONFIGURE DOWNLOAD BUTTONS
+// FIND LATEST PACKAGE PER OS
 // ========================================
 
-for (const [os, url] of Object.entries(downloads)) {
-  const button = document.getElementById(
-    `${os}-download`
-  );
+function findLatestPackages(releases) {
+  const packages = {
+    windows: null,
+    linux: null,
+    macos: null
+  };
 
-  const label = document.getElementById(
-    `${os}-button-label`
-  );
+  const published = releases
+    .filter(release =>
+      !release.draft &&
+      Boolean(release.published_at)
+    )
+    .sort((a, b) =>
+      new Date(b.published_at).getTime() -
+      new Date(a.published_at).getTime()
+    );
 
-  const hint = document.getElementById(
-    `${os}-hint`
-  );
+  for (const release of published) {
+    for (const asset of release.assets || []) {
+      if (
+        asset.state !== "uploaded" ||
+        !asset.browser_download_url
+      ) {
+        continue;
+      }
+
+      const os = detectPackageOS(asset.name);
+
+      if (!os || packages[os]) {
+        continue;
+      }
+
+      packages[os] = {
+        url: asset.browser_download_url,
+        filename: asset.name,
+        version: release.tag_name,
+        beta: Boolean(release.prerelease)
+      };
+    }
+
+    if (
+      OPERATING_SYSTEMS.every(
+        os => packages[os] !== null
+      )
+    ) {
+      break;
+    }
+  }
+
+  return packages;
+}
+
+// ========================================
+// DOWNLOAD BUTTON MANAGEMENT
+// ========================================
+
+function getDownloadElements(os) {
+  return {
+    button: document.getElementById(
+      `${os}-download`
+    ),
+    label: document.getElementById(
+      `${os}-button-label`
+    ),
+    hint: document.getElementById(
+      `${os}-hint`
+    )
+  };
+}
+
+function disableDownload(os, message) {
+  const {
+    button,
+    label,
+    hint
+  } = getDownloadElements(os);
 
   if (!button || !label || !hint) {
-    continue;
+    return;
   }
 
-  // Keep button disabled if no valid download URL exists.
-  if (!url || !/^https:\/\//i.test(url)) {
-    button.removeAttribute("href");
+  button.removeAttribute("href");
+  button.setAttribute("aria-disabled", "true");
+  button.setAttribute("tabindex", "-1");
 
-    button.setAttribute(
-      "aria-disabled",
-      "true"
-    );
+  label.textContent = "Coming soon";
+  hint.textContent = message;
+}
 
-    button.setAttribute(
-      "tabindex",
-      "-1"
-    );
+function enableDownload(os, download) {
+  const {
+    button,
+    label,
+    hint
+  } = getDownloadElements(os);
 
-    continue;
+  if (!button || !label || !hint) {
+    return;
   }
 
-  // Official GitHub Release download URL.
-  button.href = url;
+  const osNames = {
+    windows: "Windows",
+    linux: "Linux",
+    macos: "macOS"
+  };
 
-  // Enable the button.
+  const releaseType = download.beta
+    ? "Beta"
+    : "Stable";
+
+  button.href = download.url;
   button.removeAttribute("aria-disabled");
   button.removeAttribute("tabindex");
-
-  // GitHub download URLs are cross-origin.
-  // Let the browser handle the download normally.
   button.removeAttribute("download");
 
-  // Update button label and package information.
-  const details = downloadDetails[os];
+  label.textContent =
+    `Download for ${osNames[os]}`;
 
-  if (details) {
-    label.textContent = details.label;
-    hint.textContent = details.hint;
+  hint.textContent =
+    `${releaseType} ${download.version} · ${download.filename}`;
+}
+
+// ========================================
+// LOAD GITHUB RELEASES
+// ========================================
+
+async function loadLatestDownloads() {
+  for (const os of OPERATING_SYSTEMS) {
+    disableDownload(
+      os,
+      "Checking available releases..."
+    );
+  }
+
+  try {
+    const response = await fetch(RELEASES_API, {
+      headers: {
+        Accept: "application/vnd.github+json"
+      },
+      cache: "no-store"
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `GitHub API error: HTTP ${response.status}`
+      );
+    }
+
+    const releases = await response.json();
+
+    if (!Array.isArray(releases)) {
+      throw new Error(
+        "Invalid GitHub API response."
+      );
+    }
+
+    const packages = findLatestPackages(releases);
+
+    for (const os of OPERATING_SYSTEMS) {
+      if (packages[os]) {
+        enableDownload(os, packages[os]);
+      } else {
+        disableDownload(
+          os,
+          "No published package available yet."
+        );
+      }
+    }
+  } catch (error) {
+    console.error(
+      "Failed to load GitHub releases:",
+      error
+    );
+
+    for (const os of OPERATING_SYSTEMS) {
+      disableDownload(
+        os,
+        "Unable to check downloads. Please visit GitHub Releases."
+      );
+    }
   }
 }
 
@@ -108,27 +270,45 @@ for (const [os, url] of Object.entries(downloads)) {
 // OPERATING SYSTEM DETECTION
 // ========================================
 
-const platform =
-  navigator.userAgentData?.platform ||
-  navigator.platform ||
-  navigator.userAgent;
+function detectVisitorOS() {
+  const platform =
+    navigator.userAgentData?.platform ||
+    navigator.platform ||
+    navigator.userAgent;
 
-const normalized = String(platform).toLowerCase();
+  const normalized =
+    String(platform).toLowerCase();
 
-const detectedOS =
-  /windows|win32|win64/.test(normalized)
-    ? "windows"
-    : /macintosh|macintel|mac os|macos/.test(normalized)
-      ? "macos"
-      : /linux|x11/.test(normalized)
-        ? "linux"
-        : null;
+  if (/windows|win32|win64/.test(normalized)) {
+    return "windows";
+  }
+
+  if (
+    /macintosh|macintel|mac os|macos/.test(
+      normalized
+    )
+  ) {
+    return "macos";
+  }
+
+  if (/linux|x11/.test(normalized)) {
+    return "linux";
+  }
+
+  return null;
+}
 
 // ========================================
-// HIGHLIGHT RECOMMENDED DOWNLOAD
+// HIGHLIGHT RECOMMENDED PLATFORM
 // ========================================
 
-if (detectedOS) {
+function highlightVisitorPlatform() {
+  const detectedOS = detectVisitorOS();
+
+  if (!detectedOS) {
+    return;
+  }
+
   const card = document.querySelector(
     `[data-os="${detectedOS}"]`
   );
@@ -141,16 +321,15 @@ if (detectedOS) {
     "platform-note"
   );
 
-  const name =
-    detectedOS === "macos"
-      ? "macOS"
-      : detectedOS === "linux"
-        ? "Linux"
-        : "Windows";
-
   if (note) {
+    const names = {
+      windows: "Windows",
+      linux: "Linux",
+      macos: "macOS"
+    };
+
     note.textContent =
-      `Detected platform: ${name}. ` +
+      `Detected platform: ${names[detectedOS]}. ` +
       "Choose another package if needed.";
   }
 }
@@ -159,11 +338,20 @@ if (detectedOS) {
 // COPYRIGHT YEAR
 // ========================================
 
-const yearElement = document.getElementById(
-  "year"
-);
+function updateCopyrightYear() {
+  const yearElement =
+    document.getElementById("year");
 
-if (yearElement) {
-  yearElement.textContent =
-    new Date().getFullYear();
+  if (yearElement) {
+    yearElement.textContent =
+      new Date().getFullYear();
+  }
 }
+
+// ========================================
+// INITIALIZATION
+// ========================================
+
+highlightVisitorPlatform();
+updateCopyrightYear();
+loadLatestDownloads();

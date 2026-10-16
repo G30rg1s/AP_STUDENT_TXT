@@ -982,6 +982,101 @@ class StudentLauncher:
             "Install or start Docker, then retry."
         )
 
+
+    # ========================================================
+    # AUTOMATIC DOCKER DESKTOP STARTUP
+    # ========================================================
+
+    def ensure_docker_ready(self, timeout=120):
+        docker = self.find_docker_executable()
+        env = self.docker_environment(self.selected_port)
+
+        flags = (
+            getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            if self.system == "Windows"
+            else 0
+        )
+
+        def engine_is_ready():
+            try:
+                result = subprocess.run(
+                    [docker, "info", "--format", "{{.ServerVersion}}"],
+                    cwd=self.base_dir,
+                    env=env,
+                    stdin=subprocess.DEVNULL,
+                    capture_output=True,
+                    text=True,
+                    timeout=8,
+                    creationflags=flags
+                )
+                return result.returncode == 0
+
+            except (OSError, subprocess.TimeoutExpired):
+                return False
+
+        if engine_is_ready():
+            self.events.put((
+                "log",
+                "Docker Engine is already running."
+            ))
+            return
+
+        if self.system != "Windows":
+            raise RuntimeError(
+                "Docker Engine is not running. "
+                "Start Docker and try again."
+            )
+
+        docker_desktop = Path(
+            os.environ.get(
+                "PROGRAMFILES",
+                r"C:\Program Files"
+            )
+        ) / "Docker" / "Docker" / "Docker Desktop.exe"
+
+        if not docker_desktop.is_file():
+            raise RuntimeError(
+                "Docker Desktop executable not found. "
+                "Install Docker Desktop or start it manually."
+            )
+
+        self.events.put((
+            "log",
+            "Docker Engine is stopped. Starting Docker Desktop..."
+        ))
+
+        subprocess.Popen(
+            [str(docker_desktop)],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=flags
+        )
+
+        self.events.put((
+            "status",
+            "Waiting for Docker Desktop..."
+        ))
+
+        deadline = time.monotonic() + timeout
+
+        while time.monotonic() < deadline:
+            if engine_is_ready():
+                self.events.put((
+                    "log",
+                    "Docker Engine is ready."
+                ))
+                return
+
+            time.sleep(3)
+
+        raise RuntimeError(
+            "Docker Desktop did not become ready within "
+            f"{timeout} seconds. Open Docker Desktop "
+            "and check its status."
+        )
+
+
     # ========================================================
     # REAL DOCKER COMMANDS
     # ========================================================
@@ -1176,6 +1271,8 @@ class StudentLauncher:
         port = self.selected_port
 
         def action():
+            self.ensure_docker_ready()
+
             self.docker_compose(
                 "up",
                 "-d",

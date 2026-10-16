@@ -1257,6 +1257,7 @@ class StudentLauncher:
 
         return False
 
+
     # ========================================================
     # START APPLICATION
     # ========================================================
@@ -1272,6 +1273,16 @@ class StudentLauncher:
 
         def action():
             self.ensure_docker_ready()
+
+            self.events.put((
+                "status",
+                "Starting Docker containers..."
+            ))
+
+            self.events.put((
+                "log",
+                "Docker Engine ready. Starting Docker Compose..."
+            ))
 
             self.docker_compose(
                 "up",
@@ -1329,6 +1340,7 @@ class StudentLauncher:
             "Starting application...",
             action
         )
+
 
     # ========================================================
     # STOP APPLICATION

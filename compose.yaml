@@ -27,6 +27,28 @@ services:
 
 
   # ========================================
+  # APP LOGS VOLUME INITIALIZATION
+  # ========================================
+  app-logs-init:
+    image: alpine:3.20
+
+    user: "0:0"
+
+    command:
+      - sh
+      - -c
+      - |
+        mkdir -p /app/logs
+        chown -R 10001:10001 /app/logs
+        chmod 750 /app/logs
+
+    volumes:
+      - app_logs_data:/app/logs
+
+    restart: "no"
+
+
+  # ========================================
   # BACKEND
   # ========================================
   backend:
@@ -66,15 +88,22 @@ services:
       # CORS
       CORS_ORIGINS: "http://localhost:3000,http://localhost:5173"
 
+      # APP LOGS
+      AUTOMATION_LOG_FILE: "/app/logs/automation.log"
+      PARSER_LOG_FILE: "/app/logs/parser.log"
+
     volumes:
       - license_data:/app/data/license
       - uploads_data:/app/uploads
+      - app_logs_data:/app/logs
 
     depends_on:
       db:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      app-logs-init:
+        condition: service_completed_successfully
 
 
   # ========================================
@@ -87,13 +116,21 @@ services:
     environment:
       KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
 
+      # APP LOGS
+      PARSER_LOG_FILE: "/app/logs/parser.log"
+
     volumes:
       # Shared uploaded files with Backend
       - uploads_data:/app/uploads
 
+      # Shared logs with Backend
+      - app_logs_data:/app/logs
+
     depends_on:
       kafka:
         condition: service_healthy
+      app-logs-init:
+        condition: service_completed_successfully
 
     restart: unless-stopped
 
@@ -130,3 +167,4 @@ volumes:
   mysql_data:
   license_data:
   uploads_data:
+  app_logs_data:

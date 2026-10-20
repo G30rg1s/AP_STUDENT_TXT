@@ -5,8 +5,8 @@
 #define MyAppExeName "AutomationPlatformLauncher.exe"
 
 ; ============================================
-; WINDOWS SETUP - TEST BUILD
-; Source: dist-test
+; WINDOWS SETUP - PRODUCTION BUILD
+; Source: dist
 ; ============================================
 
 [Setup]
@@ -22,9 +22,9 @@ DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 
-; Keep the previous installer untouched.
-OutputDir=..\installer-output-test
-OutputBaseFilename=AutomationPlatform-Setup-Test
+; Replace the previous production installer.
+OutputDir=..\installer-output
+OutputBaseFilename=AutomationPlatform-Setup
 
 SetupIconFile=..\AutomationPlatform.ico
 UninstallDisplayIcon={app}\AutomationPlatform.ico
@@ -33,7 +33,6 @@ Compression=lzma2
 SolidCompression=yes
 
 WizardStyle=modern
-WizardResizable=no
 
 CloseApplications=yes
 RestartApplications=no
@@ -61,7 +60,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 ;
 ; Do not copy the developer's .env file.
 
-Source: "..\dist-test\AutomationPlatformLauncher\*"; DestDir: "{app}"; Excludes: ".env"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\dist\AutomationPlatformLauncher\*"; DestDir: "{app}"; Excludes: ".env"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 
 ; ============================================
@@ -140,8 +139,8 @@ begin
   Content :=
     '# Automation Platform - Student Configuration' + #13#10 +
     '# Automatically generated during installation' + #13#10 +
-        '# Do not publish this file' + #13#10#13#10 +
-        'JWT_SECRET=' + GenerateJwtSecret() + #13#10 +
+    '# Do not publish this file' + #13#10#13#10 +
+    'JWT_SECRET=' + GenerateJwtSecret() + #13#10 +
     'MYSQL_PASSWORD=1234' + #13#10 +
     'MYSQL_ROOT_PASSWORD=1234' + #13#10 +
     'APP_PORT=8080' + #13#10;

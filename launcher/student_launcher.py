@@ -1,4 +1,4 @@
-
+import hashlib
 import json
 import os
 import platform
@@ -15,6 +15,7 @@ import time
 import tkinter as tk
 import urllib.error
 import urllib.request
+import urllib.parse
 import webbrowser
 
 from datetime import datetime
@@ -22,12 +23,16 @@ from pathlib import Path
 from tkinter import messagebox, scrolledtext, simpledialog, ttk
 
 
-APP_NAME = "Automation Platform"
-COMPOSE_PROJECT_NAME = "automation-platform-student"
+APP_NAME = "Automation Platform TXT"
+COMPOSE_PROJECT_NAME = "automation-platform-student-txt"
 
 START_PORT = 8080
 MAX_PORT = 8200
 HOMEPAGE_PATH = "/automation/homepage"
+RUNNER_IMAGE = "ghcr.io/g30rg1s/gvm-runner:latest"
+RELEASE_API = "https://api.github.com/repos/G30rg1s/automation-platform-txt-releases/releases/tags/current"
+RUNNER_SERVICE = "ap-runner"
+BACKEND_CONTAINER_PORT = "8080"
 
 
 # ============================================================
@@ -137,23 +142,27 @@ class StudentLauncher:
 
         self.compose_file = self.base_dir / "compose.yaml"
         self.icon_file = self.base_dir / "AutomationPlatform.ico"
+        self.releases_dir = self.base_dir / "releases"
+        self.bundle_file = self.releases_dir / "application.gvm.txt"
 
         # Windows: preserve existing paths and configuration.
         if self.system == "Windows":
             self.env_file = self.base_dir / ".env"
 
             self.settings_dir = (
-                    Path.home() / ".automation-platform-launcher"
+                    Path.home() / ".automation-platform-txt-launcher"
             )
 
         # Linux / macOS: keep private configuration
         # in the user's home directory.
         else:
             self.settings_dir = (
-                    Path.home() / ".automation-platform-student"
+                    Path.home() / ".automation-platform-student-txt"
             )
 
             self.env_file = self.settings_dir / ".env"
+
+        self.install_state_file = self.settings_dir / "installed-release.json"
 
         self.settings_file = (
                 self.settings_dir / "settings.json"
@@ -312,7 +321,7 @@ class StudentLauncher:
 
         if content is None:
             content = (
-                "# Automation Platform Student Configuration\n"
+                "# Automation Platform TXT Configuration\n"
                 "# Do not publish this file\n"
                 "\n"
                 f"JWT_SECRET={secrets.token_hex(32)}\n"
@@ -809,8 +818,8 @@ class StudentLauncher:
         try:
             output = self.docker_compose(
                 "port",
-                "backend",
-                "8080",
+                RUNNER_SERVICE,
+                BACKEND_CONTAINER_PORT,
                 timeout=15
             )
 
@@ -878,7 +887,7 @@ class StudentLauncher:
 
             messagebox.showinfo(
                 "Application Port",
-                f"Backend already uses port {existing}.\n"
+                f"Runner/Backend already uses port {existing}.\n"
                 "Stop it before changing.",
                 parent=self.root
             )
@@ -907,7 +916,7 @@ class StudentLauncher:
             self.save_selected_port(existing)
 
             self.log(
-                f"Using existing Docker backend port: {existing}"
+                f"Using existing Docker Runner/backend port: {existing}"
             )
 
             return True
@@ -1259,14 +1268,236 @@ class StudentLauncher:
 
 
     # ========================================================
+    # TXT RELEASE + RUNNER IMAGE MANAGEMENT
+    # ========================================================
+
+    def report(self, message):
+        self.events.put(("log", message))
+
+    @staticmethod
+    def fetch_json(url, timeout=25):
+        request = urllib.request.Request(
+            url,
+            headers={
+                "Accept": "application/vnd.github+json",
+                "User-Agent": "AutomationPlatformTXT-Student/1.0",
+            },
+        )
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return json.load(response)
+
+    def get_txt_release(self):
+        """Read public release assets. Never request AES keys here."""
+        release = self.fetch_json(RELEASE_API)
+        assets = release.get("assets", [])
+        candidates = [
+            asset for asset in assets
+            if re.fullmatch(
+                r"automation-platform-v[0-9A-Za-z._-]+\.gvm\.txt",
+                asset.get("name", ""),
+            )
+        ]
+        if len(candidates) != 1:
+            raise RuntimeError(
+                "Expected exactly one versioned .gvm.txt asset "
+                "in the public 'current' release. Found: "
+                + ", ".join(a.get("name", "") for a in candidates)
+            )
+        asset = candidates[0]
+        url = asset.get("browser_download_url", "")
+        parsed = urllib.parse.urlparse(url)
+        if parsed.scheme != "https" or parsed.hostname != "github.com":
+            raise RuntimeError("Unexpected GitHub release download URL.")
+        return {
+            "asset_name": asset["name"],
+            "asset_id": asset["id"],
+            "size": asset.get("size", 0),
+            "download_url": url,
+            "release_id": release.get("id"),
+        }
+
+    def read_installed_release(self):
+        try:
+            return json.loads(self.install_state_file.read_text(encoding="utf-8"))
+        except (OSError, ValueError, TypeError):
+            return {}
+
+    def save_installed_release(self, data):
+        self.settings_dir.mkdir(parents=True, exist_ok=True)
+        temporary = self.install_state_file.with_suffix(".json.tmp")
+        temporary.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        temporary.replace(self.install_state_file)
+
+    def download_txt(self, release):
+        """Stream the large encrypted asset to a temporary file."""
+        self.releases_dir.mkdir(parents=True, exist_ok=True)
+        pending = self.releases_dir / "application.gvm.txt.download"
+        digest = hashlib.sha256()
+        size = 0
+        request = urllib.request.Request(
+            release["download_url"],
+            headers={"User-Agent": "AutomationPlatformTXT-Student/1.0"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=90) as response, pending.open("wb") as target:
+                while True:
+                    block = response.read(1024 * 1024)
+                    if not block:
+                        break
+                    target.write(block)
+                    digest.update(block)
+                    size += len(block)
+            if size < 1024 or (release["size"] and size != release["size"]):
+                raise RuntimeError("Downloaded TXT has an unexpected size.")
+            self.report(f"Downloaded encrypted TXT: {size:,} bytes")
+            return pending, digest.hexdigest()
+        except Exception:
+            pending.unlink(missing_ok=True)
+            raise
+
+    def runner_image_id(self):
+        docker = self.find_docker_executable()
+        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if self.system == "Windows" else 0
+        result = subprocess.run(
+            [docker, "image", "inspect", RUNNER_IMAGE, "--format", "{{.Id}}"],
+            cwd=self.base_dir, env=self.docker_environment(),
+            capture_output=True, text=True, timeout=25, creationflags=flags,
+        )
+        return result.stdout.strip() if result.returncode == 0 else None
+
+    def prepare_release(self, check_updates=True):
+        """Check BOTH components and stage any new TXT without changing running files."""
+        installed = self.read_installed_release()
+        old_image_id = self.runner_image_id()
+        if (not check_updates and self.bundle_file.is_file() and old_image_id):
+            self.report("Using installed TXT and Runner; updates require Update Application.")
+            return {
+                "release": {
+                    "asset_id": installed.get("asset_id"),
+                    "asset_name": installed.get("asset_name", "application.gvm.txt"),
+                    "release_id": installed.get("release_id"),
+                },
+                "pending": None,
+                "sha256": installed.get("sha256"),
+                "txt_changed": False,
+                "image_changed": False,
+                "old_image_id": old_image_id,
+                "new_image_id": old_image_id,
+            }
+        release = self.get_txt_release()
+        txt_changed = (
+                not self.bundle_file.is_file()
+                or release["asset_id"] != installed.get("asset_id")
+        )
+        self.report("TXT: " + ("new download required" if txt_changed else "already current"))
+
+        self.report("Checking latest Runner image on GHCR...")
+        self.run_command(
+            [self.find_docker_executable(), "pull", RUNNER_IMAGE], timeout=1200
+        )
+        new_image_id = self.runner_image_id()
+        if not new_image_id:
+            raise RuntimeError("Runner image could not be inspected after pull.")
+        image_changed = old_image_id != new_image_id
+        self.report("Runner: " + ("new image available" if image_changed else "already current"))
+        pending, digest = (None, installed.get("sha256"))
+        if txt_changed:
+            pending, digest = self.download_txt(release)
+        return {
+            "release": release,
+            "pending": pending,
+            "sha256": digest,
+            "txt_changed": txt_changed,
+            "image_changed": image_changed,
+            "old_image_id": old_image_id,
+            "new_image_id": new_image_id,
+        }
+
+    def apply_prepared_release(self, prepared, port, restart_if_unchanged=False):
+        """Switch TXT/image after download, restoring prior files on startup failure."""
+        changed = prepared["txt_changed"] or prepared["image_changed"]
+        if not changed and not restart_if_unchanged:
+            self.report("Both TXT and Runner are already up to date.")
+            return False
+
+        previous_state = self.read_installed_release()
+        backup = self.releases_dir / "application.gvm.txt.previous"
+        has_old_bundle = self.bundle_file.is_file()
+        previous_image = prepared["old_image_id"]
+        switched = False
+        try:
+            # Do not replace an active bind-mounted file.
+            self.docker_compose("stop", RUNNER_SERVICE, timeout=120, selected_port=port)
+            if prepared["pending"] is not None:
+                backup.unlink(missing_ok=True)
+                if has_old_bundle:
+                    self.bundle_file.replace(backup)
+                prepared["pending"].replace(self.bundle_file)
+                switched = True
+
+            # Healthy database and Kafka services start before the Runner.
+            self.docker_compose(
+                "up", "-d", "--wait", "db", "kafka",
+                timeout=900, selected_port=port,
+            )
+            self.docker_compose(
+                "up", "--no-deps", "app-logs-init", timeout=90, selected_port=port,
+            )
+            self.docker_compose(
+                "up", "-d", "--no-deps", "--force-recreate", RUNNER_SERVICE,
+                timeout=900, selected_port=port,
+            )
+            self.events.put(("status", "Waiting for Backend..."))
+            if not self.wait_for_backend(port, timeout=240):
+                raise RuntimeError("Backend did not become ready after Runner start.")
+
+            release = prepared["release"]
+            self.save_installed_release({
+                "asset_id": release["asset_id"],
+                "asset_name": release["asset_name"],
+                "release_id": release["release_id"],
+                "sha256": prepared["sha256"],
+                "runner_image_id": prepared["new_image_id"],
+            })
+            backup.unlink(missing_ok=True)
+            self.report("Application ready: TXT + Runner verified by startup.")
+            return True
+        except Exception:
+            if switched:
+                if has_old_bundle and backup.is_file():
+                    self.bundle_file.unlink(missing_ok=True)
+                    backup.replace(self.bundle_file)
+                elif not has_old_bundle:
+                    self.bundle_file.unlink(missing_ok=True)
+            # A previously pulled image may have replaced :latest locally.
+            if previous_image:
+                try:
+                    self.run_command(
+                        [self.find_docker_executable(), "tag", previous_image, RUNNER_IMAGE],
+                        timeout=30,
+                    )
+                    if has_old_bundle:
+                        self.docker_compose(
+                            "up", "-d", "--no-deps", "--force-recreate", RUNNER_SERVICE,
+                            timeout=900, selected_port=port,
+                        )
+                        self.wait_for_backend(port, timeout=180)
+                    self.report("Previous Runner image/TXT restored after failure.")
+                except Exception as rollback_error:
+                    self.report(f"Error: Rollback also failed: {rollback_error}")
+            self.save_installed_release(previous_state)
+            raise
+        finally:
+            if prepared["pending"] is not None:
+                prepared["pending"].unlink(missing_ok=True)
+
+    # ========================================================
     # START APPLICATION
     # ========================================================
 
-    def start_application(self):
-        if self.busy:
-            return
 
-        if not self.confirm_port_before_start():
+    def start_application(self):
+        if self.busy or not self.confirm_port_before_start():
             return
 
         port = self.selected_port
@@ -1274,72 +1505,27 @@ class StudentLauncher:
         def action():
             self.ensure_docker_ready()
 
-            self.events.put((
-                "status",
-                "Starting Docker containers..."
-            ))
+            self.report("Preparing encrypted TXT and Runner...")
 
-            self.events.put((
-                "log",
-                "Docker Engine ready. Starting Docker Compose..."
-            ))
+            prepared = self.prepare_release(check_updates=False)
 
-            self.docker_compose(
-                "up",
-                "-d",
-                timeout=900,
-                selected_port=port
+            self.apply_prepared_release(
+                prepared,
+                port,
+                restart_if_unchanged=True
             )
 
             self.events.put((
-                "log",
-                "Docker Compose started."
+                "status",
+                f"Running on port {port}"
             ))
 
             self.events.put((
-                "status",
-                "Waiting for backend..."
+                "open_browser",
+                self.application_url(port)
             ))
 
-            if self.wait_for_backend(port):
-                url = self.application_url(port)
-
-                self.events.put((
-                    "status",
-                    f"Running on port {port}"
-                ))
-
-                self.events.put((
-                    "log",
-                    f"Backend is responding on port {port}"
-                ))
-
-                self.events.put((
-                    "log",
-                    f"Opening homepage: {url}"
-                ))
-
-                self.events.put((
-                    "open_browser",
-                    url
-                ))
-
-            else:
-                self.events.put((
-                    "status",
-                    "Backend not ready - check logs"
-                ))
-
-                self.events.put((
-                    "log",
-                    "Backend did not respond within "
-                    "90 seconds. Check Docker logs."
-                ))
-
-        self.execute_async(
-            "Starting application...",
-            action
-        )
+        self.execute_async("Starting application...", action)
 
 
     # ========================================================
@@ -1369,74 +1555,43 @@ class StudentLauncher:
     # UPDATE APPLICATION
     # ========================================================
 
+
     def update_application(self):
         if self.busy:
             return
 
         confirmed = messagebox.askyesno(
-            "Update Application",
-            "Download the latest Docker images "
-            "and restart?\n\n"
-            "Existing data volumes are preserved.",
-            parent=self.root
+            "Update Application TXT + Runner",
+            "Check BOTH encrypted TXT and Runner Docker image for updates?\n\n"
+            "Only changed components will be installed. Application data volumes are preserved.",
+            parent=self.root,
         )
 
-        if not confirmed:
-            return
-
-        if not self.confirm_port_before_start():
+        if not confirmed or not self.confirm_port_before_start():
             return
 
         port = self.selected_port
 
         def action():
-            self.docker_compose(
-                "pull",
-                timeout=1200,
-                selected_port=port
-            )
+            self.ensure_docker_ready()
 
-            self.docker_compose(
-                "up",
-                "-d",
-                "--remove-orphans",
-                timeout=900,
-                selected_port=port
-            )
+            prepared = self.prepare_release()
+
+            changed = self.apply_prepared_release(prepared, port)
 
             self.events.put((
                 "status",
-                "Waiting for updated backend..."
+                "Update completed" if changed else "Already up to date"
             ))
 
-            if self.wait_for_backend(port):
-                url = self.application_url(port)
-
-                self.events.put((
-                    "status",
-                    f"Updated - port {port}"
-                ))
-
-                self.events.put((
-                    "log",
-                    "Application update completed."
-                ))
-
+            if changed:
                 self.events.put((
                     "open_browser",
-                    url
+                    self.application_url(port)
                 ))
 
-            else:
-                self.events.put((
-                    "status",
-                    "Update started - check logs"
-                ))
+        self.execute_async("Checking TXT + Runner updates...", action)
 
-        self.execute_async(
-            "Updating application...",
-            action
-        )
 
     # ========================================================
     # OPEN HOMEPAGE
@@ -1585,18 +1740,18 @@ class StudentLauncher:
         if self.system == "Windows":
             return (
                     desktop
-                    / "Automation Platform Launcher.lnk"
+                    / "Automation Platform TXT Launcher.lnk"
             )
 
         if self.system == "Darwin":
             return (
                     desktop
-                    / "Automation Platform Launcher.command"
+                    / "Automation Platform TXT Launcher.command"
             )
 
         return (
                 desktop
-                / "automation-platform-launcher.desktop"
+                / "automation-platform-txt-launcher.desktop"
         )
 
     def create_first_run_shortcut(self):
@@ -1722,7 +1877,7 @@ class StudentLauncher:
                 content = (
                     "[Desktop Entry]\n"
                     "Type=Application\n"
-                    "Name=Automation Platform Launcher\n"
+                    "Name=Automation Platform TXT Launcher\n"
                     f"Exec={command}\n"
                     f"Path={self.base_dir}\n"
                     "Terminal=false\n"

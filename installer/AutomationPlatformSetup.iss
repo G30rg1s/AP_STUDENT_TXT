@@ -1,30 +1,33 @@
 
-#define MyAppName "Automation Platform"
-#define MyAppVersion "1.0.1"
+#define MyAppName "Automation Platform TXT"
+#define MyAppVersion "1.0.0"
 #define MyAppPublisher "Automation Platform"
-#define MyAppExeName "AutomationPlatformLauncher.exe"
+#define MyAppExeName "AutomationPlatformTXTLauncher.exe"
 
 ; ============================================
-; WINDOWS SETUP - PRODUCTION BUILD
-; Source: dist
+; STUDENT TXT - WINDOWS SETUP
+; Separate installation from original Student
 ; ============================================
 
 [Setup]
-AppId=AutomationPlatformStudent
+
+; UNIQUE APP ID - DO NOT USE OLD STUDENT ID
+AppId=AutomationPlatformStudentTXT
+
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 
-DefaultDirName={localappdata}\Programs\Automation Platform
-DefaultGroupName=Automation Platform
+DefaultDirName={localappdata}\Programs\Automation Platform TXT
+DefaultGroupName=Automation Platform TXT
 DisableProgramGroupPage=yes
 
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 
-; Replace the previous production installer.
-OutputDir=..\installer-output
-OutputBaseFilename=AutomationPlatform-Setup
+; Dedicated output for new Student TXT installer
+OutputDir=..\installer-output-txt
+OutputBaseFilename=AutomationPlatformTXT-Setup
 
 SetupIconFile=..\AutomationPlatform.ico
 UninstallDisplayIcon={app}\AutomationPlatform.ico
@@ -37,7 +40,8 @@ WizardStyle=modern
 CloseApplications=yes
 RestartApplications=no
 
-UsePreviousAppDir=yes
+; Never reuse the old Student installation path
+UsePreviousAppDir=no
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -49,18 +53,20 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
 
-; Install the complete NEW PyInstaller build.
+; Includes:
+; - New Student TXT Launcher
+; - Python runtime
+; - compose.yaml
+; - MySQL initialization scripts
+; - Icon
 ;
-; PyInstaller was configured with:
-; contents_directory="."
-;
-; Therefore the executable, Python runtime,
-; compose.yaml, icon and Docker files are all
-; included in the same distribution tree.
-;
-; Do not copy the developer's .env file.
+; Does NOT bundle:
+; - Encrypted application TXT
+; - Runner Docker image
+; - GitHub tokens
+; - Developer .env
 
-Source: "..\dist\AutomationPlatformLauncher\*"; DestDir: "{app}"; Excludes: ".env"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\dist\AutomationPlatformTXTLauncher\*"; DestDir: "{app}"; Excludes: ".env,.env.*,*.gvm.txt,*.key"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 
 ; ============================================
@@ -69,11 +75,11 @@ Source: "..\dist\AutomationPlatformLauncher\*"; DestDir: "{app}"; Excludes: ".en
 
 [Icons]
 
-; Main Launcher - Start Menu
-Name: "{autoprograms}\Automation Platform Launcher"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\AutomationPlatform.ico"
+; Start Menu
+Name: "{autoprograms}\Automation Platform TXT Launcher"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\AutomationPlatform.ico"
 
-; Main Launcher - Desktop
-Name: "{autodesktop}\Automation Platform Launcher"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\AutomationPlatform.ico"
+; Desktop
+Name: "{autodesktop}\Automation Platform TXT Launcher"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\AutomationPlatform.ico"
 
 
 ; ============================================
@@ -82,7 +88,7 @@ Name: "{autodesktop}\Automation Platform Launcher"; Filename: "{app}\{#MyAppExeN
 
 [Run]
 
-Filename: "{app}\{#MyAppExeName}"; Description: "Launch Automation Platform"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "Launch Automation Platform TXT"; Flags: nowait postinstall skipifsilent
 
 
 ; ============================================
@@ -107,7 +113,6 @@ var
 begin
   Result := '';
 
-  { Windows cryptographically secure random generator }
   if BCryptGenRandom(0, Bytes[0], 32, 2) <> 0 then
   begin
     RaiseException(
@@ -129,16 +134,16 @@ var
 begin
   EnvFile := ExpandConstant('{app}\.env');
 
-  { Never overwrite configuration from an earlier installation. }
+  { Preserve existing settings during upgrades }
   if FileExists(EnvFile) then
   begin
-    Log('Existing .env preserved.');
+    Log('Existing Student TXT .env preserved.');
     Exit;
   end;
 
   Content :=
-    '# Automation Platform - Student Configuration' + #13#10 +
-    '# Automatically generated during installation' + #13#10 +
+    '# Automation Platform TXT Configuration' + #13#10 +
+    '# Generated automatically during installation' + #13#10 +
     '# Do not publish this file' + #13#10#13#10 +
     'JWT_SECRET=' + GenerateJwtSecret() + #13#10 +
     'MYSQL_PASSWORD=1234' + #13#10 +
@@ -148,11 +153,11 @@ begin
   if not SaveStringToFile(EnvFile, Content, False) then
   begin
     RaiseException(
-      'Unable to create the application .env file.'
+      'Unable to create Student TXT .env file.'
     );
   end;
 
-  Log('Student .env file created.');
+  Log('Student TXT .env file created.');
 end;
 
 

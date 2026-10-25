@@ -25,9 +25,8 @@ services:
       timeout: 5s
       retries: 30
 
-
   # ========================================
-  # APP LOGS VOLUME INITIALIZATION
+  # APP LOGS INITIALIZATION
   # ========================================
   app-logs-init:
     image: alpine:3.20
@@ -47,31 +46,38 @@ services:
 
     restart: "no"
 
-
   # ========================================
-  # BACKEND
+  # GVM RUNNER - BACKEND + PARSER
   # ========================================
-  backend:
-    image: ghcr.io/g30rg1s/coding-factory-automation:latest
-    pull_policy: always
+  ap-runner:
+    image: ghcr.io/g30rg1s/gvm-runner:latest
 
-    # The Student Launcher selects the free host port.
+    # Updates controlled by Student Launcher
+    pull_policy: missing
+
+    # Dynamic host port
+    # Backend listens on 8081 inside container
+    # Dynamic host port
+    # Backend listens on 8080 inside container
     ports:
       - "127.0.0.1:${APP_PORT:-8080}:8080"
 
     environment:
+
+      # ENCRYPTED TXT
+      GVM_TXT_PATH: "/app/application.gvm.txt"
 
       # PRODUCTION DATABASE
       DB_URL: "jdbc:mysql://db:3306/production?serverTimezone=UTC&allowPublicKeyRetrieval=true&useSSL=false"
       DB_USERNAME: cf_user
       DB_PASSWORD: "1234"
 
-      # FRONTEND TESTING DATABASE
+      # FRONTEND TEST DATABASE
       FRONTEND_TEST_DB_URL: "jdbc:mysql://db:3306/frontendtesting?serverTimezone=UTC&allowPublicKeyRetrieval=true&useSSL=false"
       FRONTEND_TEST_DB_USERNAME: cf_user
       FRONTEND_TEST_DB_PASSWORD: "1234"
 
-      # API TESTING DATABASE
+      # API TEST DATABASE
       API_TEST_DB_URL: "jdbc:mysql://db:3306/apitesting?serverTimezone=UTC&allowPublicKeyRetrieval=true&useSSL=false"
       API_TEST_DB_USERNAME: cf_user
       API_TEST_DB_PASSWORD: "1234"
@@ -79,20 +85,30 @@ services:
       # KAFKA
       KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
 
-      # LICENSE
+      # EXISTING LICENSE STORAGE - UNCHANGED
       CF_LICENSE_STORAGE_PATH: "/app/data/license/activation.json"
 
-      # SECURITY
-      JWT_SECRET: "${JWT_SECRET:?Copy .env.example to .env before starting}"
+      # JWT SECURITY
+      JWT_SECRET: "${JWT_SECRET:-}"
 
       # CORS
       CORS_ORIGINS: "http://localhost:3000,http://localhost:5173"
 
-      # APP LOGS
+      # LOGS
       AUTOMATION_LOG_FILE: "/app/logs/automation.log"
       PARSER_LOG_FILE: "/app/logs/parser.log"
 
     volumes:
+
+      # Encrypted TXT downloaded by Student Launcher
+      - type: bind
+        source: ./releases/application.gvm.txt
+        target: /app/application.gvm.txt
+        read_only: true
+        bind:
+          create_host_path: false
+
+      # Persistent application data
       - license_data:/app/data/license
       - uploads_data:/app/uploads
       - app_logs_data:/app/logs
@@ -105,35 +121,7 @@ services:
       app-logs-init:
         condition: service_completed_successfully
 
-
-  # ========================================
-  # PARSER SERVICE
-  # ========================================
-  parser:
-    image: ghcr.io/g30rg1s/coding-factory-automation-parser:latest
-    pull_policy: always
-
-    environment:
-      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
-
-      # APP LOGS
-      PARSER_LOG_FILE: "/app/logs/parser.log"
-
-    volumes:
-      # Shared uploaded files with Backend
-      - uploads_data:/app/uploads
-
-      # Shared logs with Backend
-      - app_logs_data:/app/logs
-
-    depends_on:
-      kafka:
-        condition: service_healthy
-      app-logs-init:
-        condition: service_completed_successfully
-
     restart: unless-stopped
-
 
   # ========================================
   # KAFKA
@@ -153,15 +141,16 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
 
     healthcheck:
-      test: [ "CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:29092 >/dev/null 2>&1" ]
+      test:
+        - CMD-SHELL
+        - "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:29092 >/dev/null 2>&1"
       interval: 2s
       timeout: 5s
       retries: 30
       start_period: 5s
 
-
 # ========================================
-# VOLUMES
+# PERSISTENT VOLUMES
 # ========================================
 volumes:
   mysql_data:

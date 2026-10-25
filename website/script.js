@@ -15,7 +15,7 @@
 // ========================================
 
 const GITHUB_OWNER = "G30rg1s";
-const GITHUB_REPO = "automation-platform-student";
+const GITHUB_REPO = "AP_STUDENT_TXT";
 
 const RELEASES_API =
   `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases?per_page=100`;

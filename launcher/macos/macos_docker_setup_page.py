@@ -857,15 +857,22 @@ class MacOSDockerSetupPage(ttk.Frame):
         )
 
         self.update_install_description()
+        brew_path = find_homebrew()
+        self.append_log(
+            "Homebrew: " + (brew_path if brew_path else "NOT INSTALLED")
+        )
 
         command = self.automatic_install_command(
             status
         )
 
+        # Keep the setup entry point available when Docker is missing.
+        # Without Homebrew, the click opens a guided prerequisite step.
+        # No install is started without an explicit confirmation.
         self.install_button.configure(
             state=(
                 "normal"
-                if command
+                if self.system == "Darwin" and status.state == "DOCKER_MISSING"
                 else "disabled"
             )
         )
@@ -882,6 +889,12 @@ class MacOSDockerSetupPage(ttk.Frame):
             self.install_description.set(
                 "Install Docker Desktop through "
                 "Homebrew after confirmation."
+            )
+
+        elif status.state == "DOCKER_MISSING" and command is None:
+            self.install_description.set(
+                "Homebrew is required for automatic installation. "
+                "Click to see how to install Homebrew first."
             )
 
         elif status.state == "DOCKER_DESKTOP_STOPPED":
@@ -996,9 +1009,27 @@ class MacOSDockerSetupPage(ttk.Frame):
             )
             return
 
-        command = self.automatic_install_command(
-            self.status
-        )
+        # Present a usable next step rather than a disabled button
+        # when Docker is missing but Homebrew is not installed.
+        if self.status.state == "DOCKER_MISSING" and not find_homebrew():
+            self.append_log(
+                "WARNING: Homebrew not found. Automatic Docker installation "
+                "needs Homebrew first.",
+                "warning",
+            )
+            open_brew_page = messagebox.askyesno(
+                "Homebrew Required",
+                "Docker Desktop is not installed, and Homebrew was not found.\n\n"
+                "Would you like to open the official Homebrew installation "
+                "instructions?\n\n"
+                "After installing Homebrew, return here and click Check Again.",
+                parent=self,
+            )
+            if open_brew_page:
+                webbrowser.open(HOMEBREW_URL)
+            return
+
+        command = self.automatic_install_command(self.status)
 
         if not command:
             messagebox.showinfo(
@@ -1287,3 +1318,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

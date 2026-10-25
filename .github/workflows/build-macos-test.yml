@@ -1,0 +1,95 @@
+
+name: Build macOS Test App
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-macos:
+    name: macOS ${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: Intel
+            os: macos-15-intel
+          - arch: Apple-Silicon
+            os: macos-15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pyinstaller
+
+      - name: Check Python code
+        run: |
+          python -m compileall -q launcher
+
+      - name: Build macOS application
+        run: |
+          python -m PyInstaller \
+            --noconfirm \
+            --clean \
+            --windowed \
+            --onedir \
+            --paths . \
+            --collect-submodules launcher.macos \
+            --hidden-import launcher.student_launcher \
+            --name AutomationPlatformLauncher \
+            launcher/main.py
+
+      - name: Create macOS package
+        run: |
+          mkdir -p dist/AutomationPlatform-macOS
+
+          cp -R dist/AutomationPlatformLauncher.app \
+            dist/AutomationPlatform-macOS/
+
+          cp compose.yaml \
+            dist/AutomationPlatform-macOS/
+
+          cp AutomationPlatform.ico \
+            dist/AutomationPlatform-macOS/
+
+          cp -R docker \
+            dist/AutomationPlatform-macOS/
+
+          mkdir -p dist/AutomationPlatform-macOS/releases
+
+          cd dist
+
+          zip -qry -y \
+            "../AutomationPlatform-macOS-${{ matrix.arch }}.zip" \
+            AutomationPlatform-macOS
+
+          cd ..
+
+          hdiutil create \
+            -volname AutomationPlatformTXT \
+            -srcfolder dist/AutomationPlatform-macOS \
+            -ov \
+            -format UDZO \
+            "AutomationPlatform-macOS-${{ matrix.arch }}.dmg"
+
+      - name: Upload macOS installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: AutomationPlatform-macOS-${{ matrix.arch }}
+          path: |
+            AutomationPlatform-macOS-${{ matrix.arch }}.zip
+            AutomationPlatform-macOS-${{ matrix.arch }}.dmg
+          if-no-files-found: error

@@ -876,51 +876,60 @@ class StudentLauncher:
 
         return selected
 
+    def runner_is_running(self):
+        """Check the Runner state without mistaking a stopped container for a running one."""
+        try:
+            container_id = self.docker_compose(
+                "ps", "--status", "running", "-q", RUNNER_SERVICE,
+                timeout=15
+            )
+            return bool(container_id.strip())
+        except Exception:
+            # A missing/stopped runner is not considered running.
+            return False
+
     def choose_port(self):
         if self.busy:
             return
 
-        existing = self.get_existing_backend_port()
-
-        if existing is not None:
-            self.save_selected_port(existing)
-
+        if self.runner_is_running():
+            existing = self.get_existing_backend_port()
             messagebox.showinfo(
                 "Application Port",
-                f"Runner/Backend already uses port {existing}.\n"
-                "Stop it before changing.",
+                f"Runner is running on host port {existing}.\n"
+                "Stop Application before choosing a new port.",
                 parent=self.root
             )
             return
 
         selected = self.ask_for_available_port(
             "Automatic Port Selection",
-            "The Launcher found a free host port."
+            "The Launcher found a free host port for the Docker Runner."
         )
 
         if selected is not None:
             self.save_selected_port(selected)
-
-            self.log(
-                f"Selected application port: {selected}"
-            )
-
-            self.log(
-                f"Homepage: {self.application_url()}"
-            )
+            self.log(f"Selected Runner host port: {selected}")
+            self.log(f"Homepage: {self.application_url()}")
 
     def confirm_port_before_start(self):
         existing = self.get_existing_backend_port()
 
-        if existing is not None:
-            self.save_selected_port(existing)
+        if self.runner_is_running():
+            if existing == self.selected_port:
+                self.log(f"Runner already uses selected host port: {existing}")
+                return True
 
-            self.log(
-                f"Using existing Docker Runner/backend port: {existing}"
+            messagebox.showinfo(
+                "Application Port",
+                f"The Runner is running on port {existing}, but port "
+                f"{self.selected_port} is selected.\n"
+                "Stop Application before changing the port.",
+                parent=self.root
             )
+            return False
 
-            return True
-
+        # A stopped container may still report its previous mapping; ignore it.
         if self.port_is_available(self.selected_port):
             return True
 

@@ -1,4 +1,5 @@
-﻿# Environment / secrets
+﻿
+# Environment / secrets
 .env
 .env.*
 !.env.example
@@ -23,6 +24,15 @@ dist-test/
 # Windows installers
 installer-output/
 installer-output-test/
+installer-output-txt/
+
+# Downloaded encrypted TXT
+/releases/application.gvm.txt
+/releases/application.gvm.txt.sha256
+
+# Temporary Runner diagnostics
+/CheckRunner.java
+/gvm-runner-inspect.jar
 
 # Operating system
 .DS_Store
